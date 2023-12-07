@@ -1,4 +1,5 @@
 ﻿using Entidades.DataBase;
+using Entidades.Excepciones;
 using Entidades.Exceptions;
 using Entidades.Files;
 using Entidades.Interfaces;
@@ -7,22 +8,28 @@ using Entidades.Interfaces;
 namespace Entidades.Modelos
 {
     public delegate void DelegadoDemoraAtencion(double demora);
-    public delegate void DelegadoNuevoIngreso(IComestible menu);
+    public delegate void DelegadoPedidoEnCurso<T>(T menu);
+    public delegate void DelegadoNuevoPedido(IComestible menu);
 
     public class Cocinero<T> where T : IComestible, new()
     {
-        private int cantPedidosFinalizados;
-        private string nombre;
-        private double demoraPreparacionTotal;
         private CancellationTokenSource cancellation;
-        private T menu;
+        private int cantPedidosFinalizados;
+        private double demoraPreparacionTotal;
+        private Mozo<T> mozo;
+        private string nombre;
+        private T pedidoEnPreparacion;
+        private Queue<T> pedidos;
         private Task tarea;
         public event DelegadoDemoraAtencion OnDemora;
-        public event DelegadoNuevoIngreso OnIngreso;
+        public event DelegadoNuevoPedido OnPedido;
 
         public Cocinero(string nombre)
         {
             this.nombre = nombre;
+            this.mozo = new Mozo<T>();
+            this.pedidos = new Queue<T>();
+            this.mozo.OnPedido += TomarNuevoPedido;
         }
 
         //No hacer nada
@@ -38,12 +45,13 @@ namespace Entidades.Modelos
             {
                 if (value && !this.HabilitarCocina)
                 {
-                    this.cancellation = new CancellationTokenSource();
-                    this.IniciarIngreso();
+                    mozo.EmpezarATrabajar = true;
+                    this.EmpezarACocinar();
                 }
                 else
                 {
                     this.cancellation.Cancel();
+                    mozo.EmpezarATrabajar = false;
                 }
             }
         }
@@ -52,40 +60,38 @@ namespace Entidades.Modelos
         public double TiempoMedioDePreparacion { get => this.cantPedidosFinalizados == 0 ? 0 : this.demoraPreparacionTotal / this.cantPedidosFinalizados; }
         public string Nombre { get => nombre; }
         public int CantPedidosFinalizados { get => cantPedidosFinalizados; }
+        public Queue<T> Pedidos { get; }
 
-        private void IniciarIngreso()
+
+        private void EmpezarACocinar()
         {
             tarea = Task.Run(() =>
             {
                 while (!cancellation.IsCancellationRequested)
                 {
-                    NotificarNuevoIngreso();
-                    EsperarProximoIngreso();
-                    cantPedidosFinalizados++;
-                    DataBaseManager.GuardarTicket(nombre, menu);
-
-                }
+                    if (this.OnPedido != null)
+                    {
+                        if (pedidos.Count > 0)
+                        {
+                            this.pedidoEnPreparacion = pedidos.Dequeue();
+                            this.OnPedido.Invoke(this.pedidoEnPreparacion);
+                            this.EsperarProximoIngreso();
+                            cantPedidosFinalizados++;
+                            DataBaseManager.GuardarTicket(nombre, this.pedidoEnPreparacion);
+                        }
+                    }
+                }   
             },
             cancellation.Token);
         }
 
-        private void NotificarNuevoIngreso()
-        {
-            if (this.OnIngreso is not null)
-            {
-                menu = new T();
-                this.menu.IniciarPreparacion();
-                this.OnIngreso.Invoke(this.menu);
-            }
-        }
-
         private void EsperarProximoIngreso()
         {
-            if (OnDemora is not null)
+            if (this.OnDemora is not null)
             {
                 int tiempoEspera = 0;
 
-                while (!cancellation.IsCancellationRequested && !menu.Estado)
+                while (!cancellation.IsCancellationRequested)
                 {
                     OnDemora.Invoke(tiempoEspera);
 
@@ -93,8 +99,15 @@ namespace Entidades.Modelos
 
                     tiempoEspera++;
                 }
-
                 demoraPreparacionTotal += tiempoEspera;
+            }
+        }
+
+        private void TomarNuevoPedido(T menu)
+        {
+            if (OnPedido is not null)
+            {
+                this.pedidos.Enqueue(menu);
             }
         }
     }

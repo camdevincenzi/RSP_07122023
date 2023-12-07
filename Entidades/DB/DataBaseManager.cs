@@ -15,7 +15,7 @@ namespace Entidades.DataBase
 
         static DataBaseManager()
         {
-            DataBaseManager.stringConnection = "Server=DESKTOP-JGCLFR3;Database=20230622SP;Trusted_Connection=True;";
+            DataBaseManager.stringConnection = "Server=.;Database=20230622SP;Trusted_Connection=True;";
             connection = new SqlConnection(stringConnection);
         }
 
