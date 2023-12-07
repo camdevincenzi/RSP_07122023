@@ -21,7 +21,7 @@ namespace Entidades.Files
         static FileManager()
         {
             path = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            path = Path.Combine(path, "RSP_07122023");
+            path = Path.Combine(path, "SP_07122023_CAMILA_DEVINCENZI");
         }
 
         private static void ValidaExistenciaDeDirectorio()
